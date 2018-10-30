@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+    <script>
+    let dataTypes = {
+        person: { // Data Definition for person
+            typeName: 'person',
+            personnummer: {
+                targetName: "pnr",
+                type: { name: "string" },
+                beskrivning: "Person-nummer",
+                validator: "luhn-validator" //(instance) => { return instance instanceof 'string'; }
+            },
+            firstName: {
+                targetName: "fn",
+                type: { name: "string" },
+                beskrivning: "Förnamn",
+                validator: "string-validator"// (instance) => { return instance instanceof 'string'; }
+            },
+            hemort: {
+                targetName: "hemortId",
+                type: { name: "reference", targetType: "ort" },
+                beskrivning: "Hemort",  
+            },
+        },
+        ort: {
+            typeName: 'ort',
+            name: {
+                targetName: "nme",
+                type: { name: "string" },
+                beskrivning: "Ortsnamn",
+                validator: "string-validator"
+            },
+            land: {
+                targetName: "landId",
+                type: { name: "reference", targetType: "land" },
+                beskrivning: "Land",
+            },
+        }, land: {
+            typeName: 'land',
+            name: {
+                targetName: "nam",
+                type: { name: "string" },
+                beskrivning: "Landsnamn",
+                validator: "string-validator"
+            },
+        },
+    };
+
+    let database = {
+        person: {
+            '1': { pnr: "123456-7897", fn: "Gunnar", hemortId: "2" },
+            '2': { pnr: "798765-4321", fn: "Anders", hemortId: "1" },
+        },
+        ort: {
+            '1': { nme: "Björkhagen", landId: "1" },
+            '2': { nme: "Bagarmossen", landId: "1" },
+        },
+        land: {
+            '1': { nam: "Bangladesh" },
+        },
+    };
+
+    var validators = {
+        'string-validator': (value) => { return typeof value === 'string' }
+    }
+
+    var handlers = {
+        person: {database: database, dataType: dataTypes.person, validator: validators},
+        ort: {database: database, dataType: dataTypes.ort, validator: validators},
+        land: {database: database, dataType: dataTypes.land, validator: validators},
+    }
+
+    //ANDERS
+    class DataClass {
+        constructor(id) {
+            this.id = id;
+        }
+
+        get handler() {
+            return {
+                get: (obj, prop) => {
+                    let dbObj = this.database[this.dataType.typeName][this.id];
+
+                    if (this.dataType[prop]) {
+                        let dataTypeProp = this.dataType[prop];
+                        let value = dbObj[dataTypeProp.targetName];
+                        
+                        if (dataTypeProp.type.name == 'reference') {
+                            let dataObj = new DataClass(value);
+                            dataObj.proxyHandler = handlers[dataTypeProp.type.targetType]
+                            return dataObj.proxy
+                        } else {
+                            return value
+                        }
+                    }
+                },
+
+                // Settern är lite halvtrasig och fixar inte referenstypen :P
+                set: function (obj, prop, value) {
+
+                    let dbObj = this.database[this.dataType.typeName][obj.id];
+
+                    if (this.dataType[prop]) {
+                        let v = this.validator[this.dataType[prop].validator]
+
+                        if (v && !v(value)) {
+                            throw "Illegal value: " + value;
+                        }
+
+                        dataType[prop].setter(dbObj, value)
+                    }
+                    return true;
+                }
+            }
+        }
+
+        set proxyHandler({database, dataType, validator}) {
+            this.database = database
+            this.dataType = dataType
+            this.validator = validator
+        }
+
+        get proxy() {
+            let myProxy = new Proxy({}, this.handler);
+            return myProxy;
+        }
+    }
+
+    function printPerson(person) {
+        console.log(person.personnummer + ", " + person.firstName + ", " + person.hemort.name + ", " + person.hemort.land.name);
+    }
+
+    function handlerMapper(handler) {
+        return (id) => {
+            let dataObj = new DataClass(id);
+            dataObj.proxyHandler = handler;
+            dataObjProxy = dataObj.proxy
+            return dataObjProxy
+        }
+    }
+
+
+    function personPredicate({path, value}) {
+        return obj => {
+            return path.reduce((acc, item) => acc[item], obj) == value
+        }
+    }
+
+    [1, 2].map(handlerMapper(handlers.person)).filter(personPredicate({path: ['hemort', 'name'], value: 'Björkhagen'})).forEach(printPerson);
+    </script>
+    dsfdfdgdfgfjgjhjh
+</body>
+</html>
